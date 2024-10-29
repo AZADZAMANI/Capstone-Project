@@ -17,7 +17,7 @@ function PatientProfile() {
     const fetchPatientData = async () => {
       try {
         // Fetch patient details
-        const patientResponse = await fetch(`http://localhost:5001/api/patients/${auth.user.id}`, {
+        const patientResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/patients/${auth.user.id}`, {
           headers: {
             'Authorization': `Bearer ${auth.token}`,
           },
@@ -31,7 +31,7 @@ function PatientProfile() {
         setPatient(patientData);
 
         // Fetch upcoming appointments
-        const upcomingResponse = await fetch(`http://localhost:5001/api/patients/${auth.user.id}/upcomingAppointments`, {
+        const upcomingResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/patients/${auth.user.id}/upcomingAppointments`, {
           headers: {
             'Authorization': `Bearer ${auth.token}`,
           },
@@ -45,7 +45,7 @@ function PatientProfile() {
         setUpcomingAppointments(upcomingData);
 
         // Fetch appointment history
-        const historyResponse = await fetch(`http://localhost:5001/api/patients/${auth.user.id}/appointmentHistory`, {
+        const historyResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/patients/${auth.user.id}/appointmentHistory`, {
           headers: {
             'Authorization': `Bearer ${auth.token}`,
           },

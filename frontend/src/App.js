@@ -1,4 +1,4 @@
-// /Users/star/Capstone/Capstone-Project-/frontend/src/App.js
+//frontend/src/App.js
 
 import React, { useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -15,7 +15,7 @@ function App() {
   const { auth } = useContext(AuthContext); // Access auth state
 
   return (
-    <Router basename="/Capstone-Project-">
+    <Router basename="/Capstone-Project">
       <div className="App">
         <Header />
         <div className="main-content">

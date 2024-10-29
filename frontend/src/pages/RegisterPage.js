@@ -27,7 +27,7 @@ function RegisterPage() {
 
   // Fetch the list of doctors from the backend when the component mounts
   useEffect(() => {
-    fetch('http://localhost:5001/api/doctors')
+    fetch(`${process.env.REACT_APP_API_URL}/api/doctors`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Failed to fetch doctors');
@@ -98,7 +98,7 @@ function RegisterPage() {
       selectedDoctor: formData.selectedDoctor,
     };
 
-    fetch('http://localhost:5001/api/register', {
+    fetch(`${process.env.REACT_APP_API_URL}/api/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

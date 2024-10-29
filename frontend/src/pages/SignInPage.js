@@ -31,7 +31,7 @@ function SignInPage() {
     setErrorMessage('');
 
     // Send data to the backend for authentication
-    fetch('http://localhost:5001/api/signin', {
+    fetch(`${process.env.REACT_APP_API_URL}/api/signin`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

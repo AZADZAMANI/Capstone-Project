@@ -23,7 +23,7 @@ function BookAppointmentPage() {
     const fetchData = async () => {
       try {
         // Fetch available time slots
-        const timesResponse = await fetch('http://localhost:5001/api/available_times', {
+        const timesResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/available_times`, {
           headers: {
             'Authorization': `Bearer ${auth.token}`,
           },
@@ -41,7 +41,7 @@ function BookAppointmentPage() {
         setUniqueDates(dates);
 
         // Fetch doctors list to get doctor's name
-        const doctorsResponse = await fetch('http://localhost:5001/api/doctors', {
+        const doctorsResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/doctors`, {
           headers: {
             'Authorization': `Bearer ${auth.token}`,
           },
@@ -106,7 +106,7 @@ function BookAppointmentPage() {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await fetch('http://localhost:5001/api/book_appointment', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/book_appointment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
