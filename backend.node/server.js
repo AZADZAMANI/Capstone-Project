@@ -20,7 +20,7 @@ const port = process.env.PORT || 5001;
 
 // CORS Configuration: Allow only specific origin during development
 const corsOptions = {
-  origin: 'http://localhost:3000', // Update this to your frontend's URL
+  origin: 'https://azadzamani.github.io/Capstone-Project-/', 
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions)); // Enable CORS with specified options
