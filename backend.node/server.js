@@ -3,28 +3,43 @@
 // Import required packages
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
+const bodyParser = require('body-parser'); // Optional: Consider using express.json() instead
 const mysql = require('mysql2');
-const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
-const util = require('util');
 
-// Load environment variables
+// Load environment variables from .env file
 dotenv.config();
 
-// Initialize the express app
+// Initialize the Express app
 const app = express();
 const port = process.env.PORT || 5001;
 
-// CORS Configuration: Allow only specific origin during development
+// CORS Configuration: Allow specific origins
+const allowedOrigins = [
+  'https://azadzamani.github.io', // GitHub Pages frontend
+  'http://localhost:3000',        // Local development frontend
+];
+
 const corsOptions = {
-  origin: 'https://azadzamani.github.io/Capstone-Project/', 
-  optionsSuccessStatus: 200,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS policy violation: Origin not allowed'));
+    }
+  },
+  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
 };
-app.use(cors(corsOptions)); // Enable CORS with specified options
-app.use(bodyParser.json()); // Parse incoming JSON data
+
+// Enable CORS with the specified options
+app.use(cors(corsOptions));
+
+// Middleware to parse incoming JSON data
+app.use(bodyParser.json()); // Alternatively, use app.use(express.json());
 
 // Initialize MySQL database connection pool
 const pool = mysql.createPool({
@@ -150,7 +165,7 @@ initializeDatabase();
 // JWT Middleware to Protect Routes
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1]; // Format: Bearer TOKEN
 
   if (!token) return res.status(401).json({ message: 'Access token missing' });
 
@@ -473,7 +488,7 @@ app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
 
-// Error handling middleware (optional but recommended)
+// Error handling middleware (should be the last middleware)
 app.use((err, req, res, next) => {
   console.error('Unhandled Error:', err);
   res.status(500).json({ error: 'Internal server error' });
