@@ -4,11 +4,12 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
+const mysql = require('mysql2');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const util = require('util');
 
 // Load environment variables
 dotenv.config();
@@ -25,130 +26,126 @@ const corsOptions = {
 app.use(cors(corsOptions)); // Enable CORS with specified options
 app.use(bodyParser.json()); // Parse incoming JSON data
 
-// Initialize SQLite database
-const dbPath = path.resolve(__dirname, 'clinic.db'); 
-const db = new sqlite3.Database(process.env.DB_PATH || dbPath, (err) => {
-  if (err) {
-    console.error('Error opening SQLite database:', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-
-    // Create doctors table first as patients table depends on it
-    db.run(
-      `CREATE TABLE IF NOT EXISTS doctors (
-        DoctorID INTEGER PRIMARY KEY AUTOINCREMENT,
-        FullName TEXT NOT NULL,
-        MaxPatientNumber INTEGER NOT NULL,
-        CurrentPatientNumber INTEGER NOT NULL DEFAULT 0
-      )`,
-      (err) => {
-        if (err) {
-          console.error('Error creating doctors table:', err.message);
-        } else {
-          console.log('Doctors table ready.');
-
-          // Insert initial doctors if table is empty
-          db.get('SELECT COUNT(*) as count FROM doctors', (err, row) => {
-            if (err) {
-              console.error('Error counting doctors:', err.message);
-            } else if (row.count === 0) {
-              const doctors = [
-                { FullName: 'Dr. John Smith', MaxPatientNumber: 100, CurrentPatientNumber: 0 },
-                { FullName: 'Dr. Emily Davis', MaxPatientNumber: 80, CurrentPatientNumber: 0 },
-                { FullName: 'Dr. Michael Brown', MaxPatientNumber: 120, CurrentPatientNumber: 0 },
-                // Add more doctors as needed
-              ];
-
-              const stmt = db.prepare(
-                `INSERT INTO doctors (FullName, MaxPatientNumber, CurrentPatientNumber) VALUES (?, ?, ?)`
-              );
-              doctors.forEach((doc) => {
-                stmt.run([doc.FullName, doc.MaxPatientNumber, doc.CurrentPatientNumber]);
-              });
-              stmt.finalize();
-              console.log('Initial doctors inserted.');
-            }
-          });
-        }
-      }
-    );
-
-    // Create patients table
-    db.run(
-      `CREATE TABLE IF NOT EXISTS patients (
-        PatientID INTEGER PRIMARY KEY AUTOINCREMENT,
-        FullName TEXT NOT NULL,
-        BirthDate TEXT NOT NULL,
-        PhoneNumber TEXT NOT NULL,
-        Email TEXT NOT NULL UNIQUE,
-        Gender TEXT NOT NULL,
-        PasswordHash TEXT NOT NULL,
-        DoctorID INTEGER,
-        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
-            ON UPDATE CASCADE
-            ON DELETE SET NULL
-      )`,
-      (err) => {
-        if (err) {
-          console.error('Error creating patients table:', err.message);
-        } else {
-          console.log('Patients table ready.');
-        }
-      }
-    );
-
-    // Create available_time table
-    db.run(
-      `CREATE TABLE IF NOT EXISTS available_time (
-        AvailableTimeID INTEGER PRIMARY KEY AUTOINCREMENT,
-        DoctorID INTEGER NOT NULL,
-        ScheduleDate TEXT NOT NULL, -- Format: 'YYYY-MM-DD'
-        StartTime TEXT NOT NULL,    -- Format: 'HH:MM'
-        EndTime TEXT NOT NULL,      -- Format: 'HH:MM'
-        IsAvailable INTEGER NOT NULL DEFAULT 1, -- 1 = Available, 0 = Not Available
-        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE
-      )`,
-      (err) => {
-        if (err) {
-          console.error('Error creating available_time table:', err.message);
-        } else {
-          console.log('Available_time table ready.');
-        }
-      }
-    );
-
-    // Create appointments table
-    db.run(
-      `CREATE TABLE IF NOT EXISTS appointments (
-        AppointmentID INTEGER PRIMARY KEY AUTOINCREMENT,
-        PatientID INTEGER NOT NULL,
-        DoctorID INTEGER NOT NULL,
-        AvailableTimeID INTEGER NOT NULL,
-        FOREIGN KEY (PatientID) REFERENCES patients(PatientID)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE,
-        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE,
-        FOREIGN KEY (AvailableTimeID) REFERENCES available_time(AvailableTimeID)
-            ON UPDATE CASCADE
-            ON DELETE CASCADE
-      )`,
-      (err) => {
-        if (err) {
-          console.error('Error creating appointments table:', err.message);
-        } else {
-          console.log('Appointments table ready.');
-        }
-      }
-    );
-  }
+// Initialize MySQL database connection pool
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'your_db_username',
+  password: process.env.DB_PASSWORD || 'your_db_password',
+  database: process.env.DB_NAME || 'clinic',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-// Serve static frontend files if needed (optional)
-// app.use(express.static(path.join(__dirname, 'public')));
+// Promisify the pool for async/await usage
+const promisePool = pool.promise();
+
+// Function to execute queries
+const executeQuery = async (query, params) => {
+  try {
+    const [rows] = await promisePool.execute(query, params);
+    return rows;
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Function to initialize the database schema
+const initializeDatabase = async () => {
+  try {
+    // Create doctors table
+    await executeQuery(
+      `CREATE TABLE IF NOT EXISTS doctors (
+        DoctorID INT PRIMARY KEY AUTO_INCREMENT,
+        FullName VARCHAR(255) NOT NULL,
+        MaxPatientNumber INT NOT NULL,
+        CurrentPatientNumber INT NOT NULL DEFAULT 0
+      )`
+    );
+    console.log('Doctors table ready.');
+
+    // Insert initial doctors if table is empty
+    const doctorsCount = await executeQuery('SELECT COUNT(*) AS count FROM doctors');
+    if (doctorsCount[0].count === 0) {
+      const doctors = [
+        { FullName: 'Dr. John Smith', MaxPatientNumber: 100, CurrentPatientNumber: 0 },
+        { FullName: 'Dr. Emily Davis', MaxPatientNumber: 80, CurrentPatientNumber: 0 },
+        { FullName: 'Dr. Michael Brown', MaxPatientNumber: 120, CurrentPatientNumber: 0 },
+        // Add more doctors as needed
+      ];
+
+      const insertDoctorPromises = doctors.map((doc) =>
+        executeQuery(
+          'INSERT INTO doctors (FullName, MaxPatientNumber, CurrentPatientNumber) VALUES (?, ?, ?)',
+          [doc.FullName, doc.MaxPatientNumber, doc.CurrentPatientNumber]
+        )
+      );
+
+      await Promise.all(insertDoctorPromises);
+      console.log('Initial doctors inserted.');
+    }
+
+    // Create patients table
+    await executeQuery(
+      `CREATE TABLE IF NOT EXISTS patients (
+        PatientID INT PRIMARY KEY AUTO_INCREMENT,
+        FullName VARCHAR(255) NOT NULL,
+        BirthDate DATE NOT NULL,
+        PhoneNumber VARCHAR(20) NOT NULL,
+        Email VARCHAR(255) NOT NULL UNIQUE,
+        Gender ENUM('Male', 'Female', 'Other') NOT NULL,
+        PasswordHash VARCHAR(255) NOT NULL,
+        DoctorID INT,
+        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
+          ON UPDATE CASCADE
+          ON DELETE SET NULL
+      )`
+    );
+    console.log('Patients table ready.');
+
+    // Create available_time table
+    await executeQuery(
+      `CREATE TABLE IF NOT EXISTS available_time (
+        AvailableTimeID INT PRIMARY KEY AUTO_INCREMENT,
+        DoctorID INT NOT NULL,
+        ScheduleDate DATE NOT NULL,
+        StartTime TIME NOT NULL,
+        EndTime TIME NOT NULL,
+        IsAvailable TINYINT(1) NOT NULL DEFAULT 1,
+        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE
+      )`
+    );
+    console.log('Available_time table ready.');
+
+    // Create appointments table
+    await executeQuery(
+      `CREATE TABLE IF NOT EXISTS appointments (
+        AppointmentID INT PRIMARY KEY AUTO_INCREMENT,
+        PatientID INT NOT NULL,
+        DoctorID INT NOT NULL,
+        AvailableTimeID INT NOT NULL,
+        FOREIGN KEY (PatientID) REFERENCES patients(PatientID)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE,
+        FOREIGN KEY (DoctorID) REFERENCES doctors(DoctorID)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE,
+        FOREIGN KEY (AvailableTimeID) REFERENCES available_time(AvailableTimeID)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE
+      )`
+    );
+    console.log('Appointments table ready.');
+  } catch (err) {
+    console.error('Error initializing database:', err.message);
+    process.exit(1);
+  }
+};
+
+// Initialize the database
+initializeDatabase();
 
 // JWT Middleware to Protect Routes
 function authenticateToken(req, res, next) {
@@ -168,102 +165,91 @@ function authenticateToken(req, res, next) {
 }
 
 // API route to register a new patient
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { fullName, birthdate, gender, phoneNumber, email, password, selectedDoctor } = req.body;
 
   if (!fullName || !birthdate || !gender || !phoneNumber || !email || !password || !selectedDoctor) {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
-  // Check if the selected doctor can accept new patients
-  const doctorQuery = `SELECT * FROM doctors WHERE DoctorID = ?`;
-  db.get(doctorQuery, [selectedDoctor], (err, doctor) => {
-    if (err) {
-      console.error('Error fetching doctor:', err.message);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    // Check if the selected doctor can accept new patients
+    const doctor = await executeQuery('SELECT * FROM doctors WHERE DoctorID = ?', [selectedDoctor]);
 
-    if (!doctor) {
+    if (doctor.length === 0) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
 
-    if (doctor.CurrentPatientNumber >= doctor.MaxPatientNumber) {
+    if (doctor[0].CurrentPatientNumber >= doctor[0].MaxPatientNumber) {
       return res.status(400).json({ error: 'Selected doctor is at full capacity. Please choose another doctor.' });
     }
 
     // Hash the password before storing
-    bcrypt.hash(password, 10, (err, hash) => {
-      if (err) {
-        console.error('Error hashing password:', err.message);
-        return res.status(500).json({ error: 'Error processing your request' });
-      }
+    const hash = await bcrypt.hash(password, 10);
 
-      // Insert the new patient
-      const insertPatientQuery = `INSERT INTO patients (FullName, BirthDate, PhoneNumber, Email, Gender, PasswordHash, DoctorID) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-      db.run(
-        insertPatientQuery,
-        [fullName, birthdate, phoneNumber, email, gender, hash, selectedDoctor],
-        function (err) {
-          if (err) {
-            console.error('Error inserting patient:', err.message);
-            return res.status(500).json({ error: 'Error registering patient' });
-          }
+    // Insert the new patient
+    const result = await executeQuery(
+      'INSERT INTO patients (FullName, BirthDate, PhoneNumber, Email, Gender, PasswordHash, DoctorID) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [fullName, birthdate, phoneNumber, email, gender, hash, selectedDoctor]
+    );
 
-          // Update doctor's current patient count
-          const updateDoctorQuery = `UPDATE doctors SET CurrentPatientNumber = CurrentPatientNumber + 1 WHERE DoctorID = ?`;
-          db.run(updateDoctorQuery, [selectedDoctor], (err) => {
-            if (err) {
-              console.error('Error updating doctor patient count:', err.message);
-              // Optionally, you might want to rollback the patient insertion here
-            }
+    // Update doctor's current patient count
+    await executeQuery('UPDATE doctors SET CurrentPatientNumber = CurrentPatientNumber + 1 WHERE DoctorID = ?', [
+      selectedDoctor,
+    ]);
 
-            res.json({ message: 'Patient registered successfully', patientId: this.lastID });
-          });
-        }
-      );
-    });
-  });
+    res.json({ message: 'Patient registered successfully', patientId: result.insertId });
+  } catch (err) {
+    console.error('Error registering patient:', err.message);
+    if (err.code === 'ER_DUP_ENTRY') {
+      res.status(400).json({ error: 'Email already exists' });
+    } else {
+      res.status(500).json({ error: 'Error registering patient' });
+    }
+  }
 });
 
 // API route to get all doctors
-app.get('/api/doctors', (req, res) => {
-  db.all('SELECT * FROM doctors', [], (err, rows) => {
-    if (err) {
-      console.error('Error fetching doctors:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
+app.get('/api/doctors', async (req, res) => {
+  try {
+    const doctors = await executeQuery('SELECT * FROM doctors');
+    res.json(doctors);
+  } catch (err) {
+    console.error('Error fetching doctors:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // API route to get all patients (protected route)
-app.get('/api/patients', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM patients', [], (err, rows) => {
-    if (err) {
-      console.error('Error fetching patients:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
+app.get('/api/patients', authenticateToken, async (req, res) => {
+  try {
+    const patients = await executeQuery('SELECT * FROM patients');
+    res.json(patients);
+  } catch (err) {
+    console.error('Error fetching patients:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // API route to get a specific patient by ID (protected route)
-app.get('/api/patients/:id', authenticateToken, (req, res) => {
+app.get('/api/patients/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  db.get('SELECT * FROM patients WHERE PatientID = ?', [id], (err, row) => {
-    if (err) {
-      console.error('Error fetching patient:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    if (!row) {
+  try {
+    const patient = await executeQuery('SELECT * FROM patients WHERE PatientID = ?', [id]);
+
+    if (patient.length === 0) {
       return res.status(404).json({ message: 'Patient not found' });
     }
-    res.json(row);
-  });
+
+    res.json(patient[0]);
+  } catch (err) {
+    console.error('Error fetching patient:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // API route to get upcoming appointments for a patient (protected route)
-app.get('/api/patients/:id/upcomingAppointments', authenticateToken, (req, res) => {
+app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   // Ensure the requester is accessing their own data
@@ -271,31 +257,33 @@ app.get('/api/patients/:id/upcomingAppointments', authenticateToken, (req, res) 
     return res.status(403).json({ message: 'Access denied' });
   }
 
-  const query = `
-    SELECT 
-      a.AppointmentID, 
-      d.FullName as doctor, 
-      at.ScheduleDate as date, 
-      at.StartTime as startTime, 
-      at.EndTime as endTime
-    FROM appointments a
-    JOIN doctors d ON a.DoctorID = d.DoctorID
-    JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
-    WHERE a.PatientID = ? AND at.ScheduleDate >= date('now')
-    ORDER BY at.ScheduleDate ASC, at.StartTime ASC
-  `;
+  try {
+    const appointments = await executeQuery(
+      `
+      SELECT 
+        a.AppointmentID, 
+        d.FullName AS doctor, 
+        DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
+        TIME_FORMAT(at.StartTime, '%H:%i') AS startTime, 
+        TIME_FORMAT(at.EndTime, '%H:%i') AS endTime
+      FROM appointments a
+      JOIN doctors d ON a.DoctorID = d.DoctorID
+      JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      WHERE a.PatientID = ? AND at.ScheduleDate >= CURDATE()
+      ORDER BY at.ScheduleDate ASC, at.StartTime ASC
+      `,
+      [id]
+    );
 
-  db.all(query, [id], (err, rows) => {
-    if (err) {
-      console.error('Error fetching upcoming appointments:', err.message);
-      return res.status(500).json({ error: 'Failed to fetch appointments' });
-    }
-    res.json(rows);
-  });
+    res.json(appointments);
+  } catch (err) {
+    console.error('Error fetching upcoming appointments:', err.message);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
 });
 
 // API route to get appointment history for a patient (protected route)
-app.get('/api/patients/:id/appointmentHistory', authenticateToken, (req, res) => {
+app.get('/api/patients/:id/appointmentHistory', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   // Ensure the requester is accessing their own data
@@ -303,68 +291,69 @@ app.get('/api/patients/:id/appointmentHistory', authenticateToken, (req, res) =>
     return res.status(403).json({ message: 'Access denied' });
   }
 
-  const query = `
-    SELECT 
-      a.AppointmentID, 
-      d.FullName as doctor, 
-      at.ScheduleDate as date, 
-      at.StartTime as time
-    FROM appointments a
-    JOIN doctors d ON a.DoctorID = d.DoctorID
-    JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
-    WHERE a.PatientID = ? AND at.ScheduleDate < date('now')
-    ORDER BY at.ScheduleDate DESC, at.StartTime DESC
-  `;
+  try {
+    const history = await executeQuery(
+      `
+      SELECT 
+        a.AppointmentID, 
+        d.FullName AS doctor, 
+        DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
+        TIME_FORMAT(at.StartTime, '%H:%i') AS time
+      FROM appointments a
+      JOIN doctors d ON a.DoctorID = d.DoctorID
+      JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      WHERE a.PatientID = ? AND at.ScheduleDate < CURDATE()
+      ORDER BY at.ScheduleDate DESC, at.StartTime DESC
+      `,
+      [id]
+    );
 
-  db.all(query, [id], (err, rows) => {
-    if (err) {
-      console.error('Error fetching appointment history:', err.message);
-      return res.status(500).json({ error: 'Failed to fetch appointment history' });
-    }
-    res.json(rows);
-  });
+    res.json(history);
+  } catch (err) {
+    console.error('Error fetching appointment history:', err.message);
+    res.status(500).json({ error: 'Failed to fetch appointment history' });
+  }
 });
 
 // API route to fetch available time slots for the patient's doctor (protected route)
-app.get('/api/available_times', authenticateToken, (req, res) => {
+app.get('/api/available_times', authenticateToken, async (req, res) => {
   const patientID = req.user.id;
 
-  // Fetch the doctor's ID assigned to the patient
-  const doctorQuery = `SELECT DoctorID FROM patients WHERE PatientID = ?`;
-  db.get(doctorQuery, [patientID], (err, row) => {
-    if (err) {
-      console.error('Error fetching doctor for patient:', err.message);
-      return res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    // Fetch the doctor's ID assigned to the patient
+    const doctorResult = await executeQuery('SELECT DoctorID FROM patients WHERE PatientID = ?', [patientID]);
 
-    if (!row || !row.DoctorID) {
+    if (doctorResult.length === 0 || !doctorResult[0].DoctorID) {
       return res.status(400).json({ error: 'No doctor assigned to the patient' });
     }
 
-    const doctorID = row.DoctorID;
+    const doctorID = doctorResult[0].DoctorID;
 
     // Fetch available time slots for the doctor
-    const availableTimesQuery = `
-      SELECT AvailableTimeID, DoctorID, ScheduleDate, StartTime, EndTime
+    const availableTimes = await executeQuery(
+      `
+      SELECT 
+        AvailableTimeID, 
+        DoctorID, 
+        DATE_FORMAT(ScheduleDate, '%Y-%m-%d') AS ScheduleDate, 
+        TIME_FORMAT(StartTime, '%H:%i') AS StartTime, 
+        TIME_FORMAT(EndTime, '%H:%i') AS EndTime
       FROM available_time
-      WHERE DoctorID = ? AND IsAvailable = 1 AND ScheduleDate >= date('now')
+      WHERE DoctorID = ? AND IsAvailable = 1 AND ScheduleDate >= CURDATE()
       ORDER BY ScheduleDate ASC, StartTime ASC
-    `;
+      `,
+      [doctorID]
+    );
 
-    db.all(availableTimesQuery, [doctorID], (err, times) => {
-      if (err) {
-        console.error('Error fetching available time slots:', err.message);
-        return res.status(500).json({ error: 'Failed to fetch available time slots' });
-      }
-
-      res.json(times);
-    });
-  });
+    res.json(availableTimes);
+  } catch (err) {
+    console.error('Error fetching available time slots:', err.message);
+    res.status(500).json({ error: 'Failed to fetch available time slots' });
+  }
 });
 
-
 // API route to book an appointment (protected route)
-app.post('/api/book_appointment', authenticateToken, (req, res) => {
+app.post('/api/book_appointment', authenticateToken, async (req, res) => {
   const patientID = req.user.id;
   const { availableTimeID } = req.body;
 
@@ -372,86 +361,60 @@ app.post('/api/book_appointment', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'AvailableTimeID is required' });
   }
 
-  // Start a transaction to ensure atomicity
-  db.serialize(() => {
-    db.run('BEGIN TRANSACTION');
+  try {
+    // Start a transaction
+    await promisePool.query('START TRANSACTION');
 
     // Check if the available time slot is still available
-    const checkAvailabilityQuery = `
-      SELECT * FROM available_time
-      WHERE AvailableTimeID = ? AND IsAvailable = 1
-    `;
+    const timeSlotResult = await executeQuery(
+      'SELECT * FROM available_time WHERE AvailableTimeID = ? AND IsAvailable = 1 FOR UPDATE',
+      [availableTimeID]
+    );
 
-    db.get(checkAvailabilityQuery, [availableTimeID], (err, timeSlot) => {
-      if (err) {
-        console.error('Error checking time slot availability:', err.message);
-        db.run('ROLLBACK');
-        return res.status(500).json({ error: 'Failed to book appointment' });
-      }
+    if (timeSlotResult.length === 0) {
+      await promisePool.query('ROLLBACK');
+      return res.status(400).json({ error: 'Selected time slot is no longer available' });
+    }
 
-      if (!timeSlot) {
-        db.run('ROLLBACK');
-        return res.status(400).json({ error: 'Selected time slot is no longer available' });
-      }
+    const timeSlot = timeSlotResult[0];
+    const doctorID = timeSlot.DoctorID;
+    const scheduleDate = timeSlot.ScheduleDate;
+    const startTime = timeSlot.StartTime;
+    const endTime = timeSlot.EndTime;
 
-      const doctorID = timeSlot.DoctorID;
-      const scheduleDate = timeSlot.ScheduleDate;
-      const startTime = timeSlot.StartTime;
-      const endTime = timeSlot.EndTime;
+    // Insert the appointment
+    const appointmentResult = await executeQuery(
+      'INSERT INTO appointments (PatientID, DoctorID, AvailableTimeID) VALUES (?, ?, ?)',
+      [patientID, doctorID, availableTimeID]
+    );
 
-      // Insert the appointment
-      const insertAppointmentQuery = `
-        INSERT INTO appointments (PatientID, DoctorID, AvailableTimeID)
-        VALUES (?, ?, ?)
-      `;
-      db.run(insertAppointmentQuery, [patientID, doctorID, availableTimeID], function (err) {
-        if (err) {
-          console.error('Error inserting appointment:', err.message);
-          db.run('ROLLBACK');
-          return res.status(500).json({ error: 'Failed to book appointment' });
-        }
+    const appointmentID = appointmentResult.insertId;
 
-        const appointmentID = this.lastID;
+    // Update the available_time slot to not available
+    await executeQuery('UPDATE available_time SET IsAvailable = 0 WHERE AvailableTimeID = ?', [availableTimeID]);
 
-        // Update the available_time slot to not available
-        const updateTimeSlotQuery = `
-          UPDATE available_time
-          SET IsAvailable = 0
-          WHERE AvailableTimeID = ?
-        `;
-        db.run(updateTimeSlotQuery, [availableTimeID], function (err) {
-          if (err) {
-            console.error('Error updating time slot availability:', err.message);
-            db.run('ROLLBACK');
-            return res.status(500).json({ error: 'Failed to book appointment' });
-          }
+    // Commit the transaction
+    await promisePool.query('COMMIT');
 
-          // Commit the transaction
-          db.run('COMMIT', (err) => {
-            if (err) {
-              console.error('Error committing transaction:', err.message);
-              return res.status(500).json({ error: 'Failed to book appointment' });
-            }
-
-            res.json({
-              message: 'Appointment booked successfully',
-              appointment: {
-                AppointmentID: appointmentID,
-                DoctorID: doctorID,
-                ScheduleDate: scheduleDate,
-                StartTime: startTime,
-                EndTime: endTime,
-              },
-            });
-          });
-        });
-      });
+    res.json({
+      message: 'Appointment booked successfully',
+      appointment: {
+        AppointmentID: appointmentID,
+        DoctorID: doctorID,
+        ScheduleDate: scheduleDate,
+        StartTime: startTime,
+        EndTime: endTime,
+      },
     });
-  });
+  } catch (err) {
+    console.error('Error booking appointment:', err.message);
+    await promisePool.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to book appointment' });
+  }
 });
 
 // Login endpoint
-app.post('/api/signin', (req, res) => {
+app.post('/api/signin', async (req, res) => {
   const { email, password } = req.body;
 
   // Check if both fields are filled in
@@ -459,47 +422,43 @@ app.post('/api/signin', (req, res) => {
     return res.status(400).json({ message: 'Please enter both email and password' });
   }
 
-  // Find the user by email
-  const query = `SELECT * FROM patients WHERE Email = ?`;
-  db.get(query, [email], (err, user) => {
-    if (err) {
-      console.error('Error retrieving user:', err.message);
-      return res.status(500).json({ message: 'Error retrieving user' });
-    }
+  try {
+    // Find the user by email
+    const users = await executeQuery('SELECT * FROM patients WHERE Email = ?', [email]);
 
-    if (!user) {
+    if (users.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const user = users[0];
+
     // Compare the entered password with the stored hashed password
-    bcrypt.compare(password, user.PasswordHash, (err, isMatch) => {
-      if (err) {
-        console.error('Error comparing passwords:', err.message);
-        return res.status(500).json({ message: 'Error comparing passwords' });
-      }
+    const isMatch = await bcrypt.compare(password, user.PasswordHash);
 
-      if (!isMatch) {
-        return res.status(401).json({ message: 'Incorrect password' });
-      }
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Incorrect password' });
+    }
 
-      // If password matches, issue a JWT token
-      const token = jwt.sign(
-        { id: user.PatientID, email: user.Email },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-      );
+    // If password matches, issue a JWT token
+    const token = jwt.sign(
+      { id: user.PatientID, email: user.Email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
 
-      res.json({
-        message: 'Sign-in successful',
-        token,
-        user: {
-          id: user.PatientID,
-          FullName: user.FullName,
-          Email: user.Email,
-        },
-      });
+    res.json({
+      message: 'Sign-in successful',
+      token,
+      user: {
+        id: user.PatientID,
+        FullName: user.FullName,
+        Email: user.Email,
+      },
     });
-  });
+  } catch (err) {
+    console.error('Error during sign-in:', err.message);
+    res.status(500).json({ message: 'Error during sign-in' });
+  }
 });
 
 // Logout endpoint (optional)
