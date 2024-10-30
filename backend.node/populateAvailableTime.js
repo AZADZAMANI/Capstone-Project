@@ -1,64 +1,55 @@
 // populateAvailableTime.js
 
-const sqlite3 = require('sqlite3').verbose();
+const mysql = require('mysql2/promise');
+const dotenv = require('dotenv');
 const path = require('path');
 
-// Helper function to format date as YYYY-MM-DD
+dotenv.config();
+
+// Helper functions remain the same
 function formatDate(date) {
   const year = date.getFullYear();
-  const month = (`0${ (date.getMonth() + 1)}`).slice(-2);
-  const day = (`0${ date.getDate()}`).slice(-2);
+  const month = (`0${date.getMonth() + 1}`).slice(-2);
+  const day = (`0${date.getDate()}`).slice(-2);
   return `${year}-${month}-${day}`;
 }
 
-// Helper function to format time as HH:MM in 24-hour format
 function formatTime(hour) {
-  return `${hour.toString().padStart(2, '0')}:00`;
+  return `${hour.toString().padStart(2, '0')}:00:00`;
 }
 
-// Connect to the SQLite database
-const dbPath = path.resolve(__dirname, 'clinic.db'); // Adjust the path if necessary
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening SQLite database:', err.message);
-    process.exit(1);
-  } else {
-    console.log('Connected to the SQLite database.');
-    initialize();
-  }
-});
+async function populateAvailableTime() {
+  try {
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'your_db_username',
+      password: process.env.DB_PASSWORD || 'your_db_password',
+      database: process.env.DB_NAME || 'clinic',
+    });
 
-// Function to initialize the population process
-function initialize() {
-  // Step 1: Retrieve all DoctorIDs
-  const getDoctorsQuery = `SELECT DoctorID FROM doctors`;
+    console.log('Connected to the database.');
 
-  db.all(getDoctorsQuery, [], (err, rows) => {
-    if (err) {
-      console.error('Error fetching doctors:', err.message);
-      db.close();
-      process.exit(1);
-    }
+    const deleteResult = await connection.execute(
+      'DELETE FROM available_time WHERE ScheduleDate < CURDATE()'
+    );
+    console.log('Deleted expired available_time records.');
 
-    if (rows.length === 0) {
+    // Retrieve all DoctorIDs
+    const [doctors] = await connection.execute('SELECT DoctorID FROM doctors');
+    if (doctors.length === 0) {
       console.log('No doctors found in the database. Please add doctors first.');
-      db.close();
-      process.exit(0);
+      await connection.end();
+      return;
     }
 
-    const doctorIDs = rows.map(row => row.DoctorID);
+    const doctorIDs = doctors.map(doc => doc.DoctorID);
     console.log(`Found ${doctorIDs.length} doctor(s).`);
 
-    // Step 2: Generate time slots for the next 10 days
+    // Generate time slots for the next 10 days
     const today = new Date();
     const numberOfDays = 10;
     const dailyStartHour = 9;  // 9:00 AM
     const dailyEndHour = 16;   // 4:00 PM
-
-    const insertStmt = db.prepare(`
-      INSERT INTO available_time (DoctorID, ScheduleDate, StartTime, EndTime, IsAvailable)
-      VALUES (?, ?, ?, ?, ?)
-    `);
 
     let totalInserts = 0;
 
@@ -71,31 +62,24 @@ function initialize() {
         const startTime = formatTime(hour);
         const endTime = formatTime(hour + 1);
 
-        doctorIDs.forEach((doctorID) => {
-          // Randomly determine availability: 1 (available) or 0 (not available)
+        for (const doctorID of doctorIDs) {
           const isAvailable = Math.random() < 0.7 ? 1 : 0; // 70% chance available
-
-          insertStmt.run(
-            [doctorID, formattedDate, startTime, endTime, isAvailable],
-            (err) => {
-              if (err) {
-                console.error('Error inserting available time:', err.message);
-              } else {
-                totalInserts++;
-              }
-            }
+          await connection.execute(
+            'INSERT INTO available_time (DoctorID, ScheduleDate, StartTime, EndTime, IsAvailable) VALUES (?, ?, ?, ?, ?)',
+            [doctorID, formattedDate, startTime, endTime, isAvailable]
           );
-        });
+          totalInserts++;
+        }
       }
     }
 
-    insertStmt.finalize((err) => {
-      if (err) {
-        console.error('Error finalizing statement:', err.message);
-      } else {
-        console.log(`Inserted ${totalInserts} available time slots into the database.`);
-      }
-      db.close();
-    });
-  });
+    console.log(`Inserted ${totalInserts} available time slots into the database.`);
+    await connection.end();
+    console.log('Database connection closed.');
+  } catch (error) {
+    console.error('Error populating available time:', error.message);
+    process.exit(1); 
+  }
 }
+
+populateAvailableTime();

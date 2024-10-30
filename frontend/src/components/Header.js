@@ -51,7 +51,6 @@ function Header() {
     <header className="header">
       <div className="logo-container">
         <Link to="/" className="logo-link">
-          {/* Replace with your logo image if available */}
           <span className="logo-text">Destination Health</span>
         </Link>
       </div>

@@ -1,10 +1,9 @@
 // /frontend/src/pages/RegisterPage.js
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './RegisterPage.css';
 import '../common.css';
-import { AuthContext } from '../AuthContext'; // Import AuthContext
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
