@@ -33,6 +33,7 @@ const corsOptions = {
     }
   },
   optionsSuccessStatus: 200, // Some legacy browsers choke on 204
+  credentials: true, 
 };
 
 // Enable CORS with the specified options

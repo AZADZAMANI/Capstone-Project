@@ -1,4 +1,4 @@
-// /Users/star/Capstone/Capstone-Project-/frontend/src/pages/SignInPage.js
+// src/pages/SignInPage.js
 
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -30,8 +30,10 @@ function SignInPage() {
     // Clear any previous error message
     setErrorMessage('');
 
+    const API_URL = process.env.REACT_APP_API_URL;
+
     // Send data to the backend for authentication
-    fetch(`${process.env.REACT_APP_API_URL}/api/signin`, {
+    fetch(`${API_URL}/api/signin`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
