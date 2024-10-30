@@ -6,6 +6,14 @@
     overflow-y: auto;
   }
 
+  .header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 80px; 
+    z-index: 1000;
+  }
+  
   .profile-btn {
     background: none;
     border: none;
