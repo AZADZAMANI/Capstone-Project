@@ -1,9 +1,8 @@
 # **Capstone Project Backend Deployment Report**
-2024/10/29
-
+Oct 29, 2024
 ### **Overview**
 
-The backend of our Capstone Project has been successfully deployed to an **AWS EC2 instance** with a scalable and secure architecture designed to handle our production environment's requirements. This deployment supports a **Node.js and Express** API, backed by a **MySQL** database, with traffic managed and secured through **Nginx** and **PM2**. SSL encryption has been implemented using **Let’s Encrypt** for secure HTTPS communication.
+The backend of our Capstone Project has been deployed on an **AWS EC2** instance with a robust, secure architecture designed for production. This deployment supports a **Node.js** and **Express.js** API, backed by **MySQL**, managed via **PM2** for application uptime, with **Nginx** as a reverse proxy, and **Cron** jobs for scheduled tasks. SSL encryption is implemented using **Let’s Encrypt** to secure HTTP communications.
 
 ---
 
@@ -12,65 +11,75 @@ The backend of our Capstone Project has been successfully deployed to an **AWS E
 1. **Compute Environment**
    - **Platform**: AWS EC2 instance
    - **Operating System**: Ubuntu 20.04 LTS
-   - **Application Manager**: PM2, for automatic process management and recovery
+   - **Process Manager**: PM2 for maintaining high availability and automated recovery.
 
 2. **Application Server (Node.js & Express)**
-   - The backend server is built using **Node.js** and the **Express** framework.
-   - **API Endpoints**: Includes routes for user registration, authentication, appointment scheduling, and profile management.
-   - **Environment Configuration**: Managed via a `.env` file (not in version control) that stores sensitive configurations like database credentials and JWT secrets.
+   - **Framework**: Express handles API requests.
+   - **Environment Configuration**: Managed via a `.env` file with variables like database credentials and JWT secrets.
+   - **Scheduled Script**: A new **populateAvailableTime.js** script has been added and configured to run daily using **Cron**.
 
 3. **Database Server (MySQL)**
-   - **Database**: MySQL, hosted on the same EC2 instance for ease of access.
-   - **Purpose**: Stores data related to patients, doctors, and appointment scheduling.
-   - **Connection Pooling**: Configured to manage multiple connections efficiently and prevent resource overuse.
+   - **Database**: MySQL, on the same EC2 instance for optimized access.
+   - **Connection Pooling**: Efficiently manages multiple requests without overloading resources.
 
 4. **Reverse Proxy (Nginx)**
-   - **Role**: Acts as a reverse proxy, routing incoming requests from the domain to the Express application on port 5001.
-   - **SSL Configuration**: HTTPS is enabled through Nginx with SSL certificates issued by Let’s Encrypt.
-   - **Redirect**: HTTP traffic is automatically redirected to HTTPS to enforce secure communication.
+   - **Role**: Acts as a reverse proxy, forwarding requests from `fdu.xtrader.top` to the Express application on port 5001.
+   - **SSL Configuration**: Configured with Let’s Encrypt for HTTPS, enforcing encrypted connections.
 
 5. **Process Management (PM2)**
-   - **Functionality**: PM2 manages the Express application process, ensuring it remains active and automatically restarts in the event of a crash.
-   - **Configuration**: PM2 is set to launch at system startup, ensuring persistent uptime.
-   - **Logging**: PM2 provides centralized logging, making it easy to monitor and troubleshoot application performance.
+   - **Purpose**: Manages the Node.js backend, restarts on failure, and ensures the application starts at boot.
+   - **Logging**: Logs application output and error messages, available for debugging.
 
-6. **SSL Encryption**
-   - **Provider**: Let’s Encrypt via Certbot
-   - **Domain**: `fdu.xtrader.top`
-   - **Renewal**: Certbot is configured to renew the SSL certificate automatically, ensuring uninterrupted HTTPS access.
+6. **Automated Cron Job**
+   - **Script**: `populateAvailableTime.js`, scheduled to run daily at 2 AM to automate tasks related to available time slots.
+   - **Cron Configuration**:
+     - Executes with `node` and logs to `populateAvailableTime.log` for easy review of execution results.
+     - **Path**: The cron job changes to the backend directory before running to ensure the `.env` file loads correctly.
 
-7. **Custom Domain Configuration**
+7. **SSL Encryption**
+   - **Provider**: Let’s Encrypt with Certbot
    - **Domain**: `fdu.xtrader.top`
-   - **DNS Configuration**: A records point to the EC2 instance’s public IP.
-   - **SSL-secured Access**: All traffic to the backend API is accessible through `https://fdu.xtrader.top`.
+   - **Renewal**: Automated with Certbot, ensuring uninterrupted HTTPS access.
+
+8. **Custom Domain Configuration**
+   - **Domain**: `fdu.xtrader.top`
+   - **DNS Configuration**: Points A record to the EC2 instance’s public IP for consistent accessibility.
 
 ---
 
 ### **Security Configurations**
 
 1. **Firewall and Security Groups**
-   - **Inbound Rules**: Only ports 80 (HTTP), 443 (HTTPS), and 22 (SSH) are open to the public. SSH access is restricted to specific IPs.
-   - **Outbound Rules**: Allow all outbound traffic to support necessary services and updates.
+   - **Inbound Rules**: Only ports 80 (HTTP), 443 (HTTPS), and 22 (SSH) are open. SSH access is restricted to specific IPs for security.
+   - **Outbound Rules**: Permit all outbound traffic to support services and updates.
 
-2. **CORS (Cross-Origin Resource Sharing)**
-   - Configured to restrict API access to the frontend hosted on `https://azadzamani.github.io`.
+2. **CORS Policy**
+   - **Origin Restriction**: Limits API access to the frontend hosted at `https://azadzamani.github.io`.
 
 3. **HTTPS Enforcement**
-   - All traffic is redirected from HTTP to HTTPS through Nginx, protecting data in transit with SSL encryption.
+   - Nginx redirects all HTTP traffic to HTTPS, ensuring secure data transmission.
 
-### **Monitoring and Maintenance**
+### **Maintenance Configuration**
 
 1. **Process Monitoring**
-   - **PM2**: Manages the application lifecycle, automatically restarting processes as needed and monitoring system resource use.
+   - **PM2**: Ensures continuous runtime, with automatic process restarts if necessary.
+   - **Logging**: Both PM2 and Nginx logs facilitate monitoring and troubleshooting:
+     - **Application Logs**: Available through PM2 for application-specific events.
+     - **Nginx Logs**: Access and error logs available at `/var/log/nginx`.
 
-2. **Logging and Debugging**
-   - PM2 and Nginx logs are accessible for debugging and real-time monitoring:
-     - **Application Logs**: PM2 logs in the application directory.
-     - **Access Logs**: Nginx access and error logs are stored in `/var/log/nginx`.
+2. **Automated Daily Script Execution**
+   - **Cron Job**: Automates the `populateAvailableTime.js` script to run daily at 2 AM.
+   - **Log Output**: Results are saved to `populateAvailableTime.log` in the backend directory, confirming task completion and assisting with troubleshooting.
 
 3. **Database Backup**
-   - Regular backups are planned using `mysqldump`, ensuring data safety and recoverability.
+   - **Scheduled Backups**: Database backups are planned via `mysqldump` to ensure data recoverability.
 
----
+4. **SSL Renewal**
+   - Certbot’s cron job handles SSL renewal, with testing using:
+     ```bash
+     sudo certbot renew --dry-run
+     ```
 
-This deployment is stable and well-secured, with managed failover, SSL protection, and efficient resource allocation. This architecture supports future scalability and provides a reliable foundation for ongoing project maintenance.
+### **Conclusion**
+
+This deployment provides a scalable, secure, and reliable backend for the Capstone Project, with automated daily scripts and managed failover. This architecture is prepared for future scaling and supports efficient maintenance routines for ongoing backend stability.
