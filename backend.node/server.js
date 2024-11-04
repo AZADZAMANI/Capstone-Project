@@ -20,6 +20,7 @@ const port = process.env.PORT || 5001;
 const allowedOrigins = [
   'https://azadzamani.github.io', // GitHub Pages frontend
   'http://localhost:3000',        // Local development frontend
+  'https://fdu.xtrader.top'
 ];
 
 const corsOptions = {
