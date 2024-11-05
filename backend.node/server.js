@@ -70,11 +70,13 @@ const executeQuery = async (query, params) => {
 // Function to initialize the database schema
 const initializeDatabase = async () => {
   try {
-    // Create doctors table
+    // Create doctors table with Email and PasswordHash
     await executeQuery(
       `CREATE TABLE IF NOT EXISTS doctors (
         DoctorID INT PRIMARY KEY AUTO_INCREMENT,
         FullName VARCHAR(255) NOT NULL,
+        Email VARCHAR(255) NOT NULL UNIQUE,
+        PasswordHash VARCHAR(255) NOT NULL,
         MaxPatientNumber INT NOT NULL,
         CurrentPatientNumber INT NOT NULL DEFAULT 0
       )`
@@ -85,18 +87,19 @@ const initializeDatabase = async () => {
     const doctorsCount = await executeQuery('SELECT COUNT(*) AS count FROM doctors');
     if (doctorsCount[0].count === 0) {
       const doctors = [
-        { FullName: 'Dr. John Smith', MaxPatientNumber: 100, CurrentPatientNumber: 0 },
-        { FullName: 'Dr. Emily Davis', MaxPatientNumber: 80, CurrentPatientNumber: 0 },
-        { FullName: 'Dr. Michael Brown', MaxPatientNumber: 120, CurrentPatientNumber: 0 },
+        { FullName: 'Dr. John Smith', Email: 'john.smith@example.com', Password: 'password123', MaxPatientNumber: 100, CurrentPatientNumber: 0 },
+        { FullName: 'Dr. Emily Davis', Email: 'emily.davis@example.com', Password: 'password123', MaxPatientNumber: 80, CurrentPatientNumber: 0 },
+        { FullName: 'Dr. Michael Brown', Email: 'michael.brown@example.com', Password: 'password123', MaxPatientNumber: 120, CurrentPatientNumber: 0 },
         // Add more doctors as needed
       ];
 
-      const insertDoctorPromises = doctors.map((doc) =>
-        executeQuery(
-          'INSERT INTO doctors (FullName, MaxPatientNumber, CurrentPatientNumber) VALUES (?, ?, ?)',
-          [doc.FullName, doc.MaxPatientNumber, doc.CurrentPatientNumber]
-        )
-      );
+      const insertDoctorPromises = doctors.map(async (doc) => {
+        const hash = await bcrypt.hash(doc.Password, 10);
+        return executeQuery(
+          'INSERT INTO doctors (FullName, Email, PasswordHash, MaxPatientNumber, CurrentPatientNumber) VALUES (?, ?, ?, ?, ?)',
+          [doc.FullName, doc.Email, hash, doc.MaxPatientNumber, doc.CurrentPatientNumber]
+        );
+      });
 
       await Promise.all(insertDoctorPromises);
       console.log('Initial doctors inserted.');
@@ -176,7 +179,7 @@ function authenticateToken(req, res, next) {
       console.error('JWT verification failed:', err.message);
       return res.status(403).json({ message: 'Invalid access token' });
     }
-    req.user = user; // { id: PatientID, email: Email }
+    req.user = user; // { id, email, role }
     next();
   });
 }
@@ -251,6 +254,12 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
 // API route to get a specific patient by ID (protected route)
 app.get('/api/patients/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
+
+  // Ensure the requester is accessing their own data or is a doctor
+  if (req.user.role !== 'patient' || parseInt(id, 10) !== req.user.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+
   try {
     const patient = await executeQuery('SELECT * FROM patients WHERE PatientID = ?', [id]);
 
@@ -269,8 +278,8 @@ app.get('/api/patients/:id', authenticateToken, async (req, res) => {
 app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
-  // Ensure the requester is accessing their own data
-  if (parseInt(id, 10) !== req.user.id) {
+  // Ensure the requester is accessing their own data or is a doctor
+  if (req.user.role !== 'patient' || parseInt(id, 10) !== req.user.id) {
     return res.status(403).json({ message: 'Access denied' });
   }
 
@@ -303,8 +312,8 @@ app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req,
 app.get('/api/patients/:id/appointmentHistory', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
-  // Ensure the requester is accessing their own data
-  if (parseInt(id, 10) !== req.user.id) {
+  // Ensure the requester is accessing their own data or is a doctor
+  if (req.user.role !== 'patient' || parseInt(id, 10) !== req.user.id) {
     return res.status(403).json({ message: 'Access denied' });
   }
 
@@ -430,7 +439,7 @@ app.post('/api/book_appointment', authenticateToken, async (req, res) => {
   }
 });
 
-// Login endpoint
+// Login endpoint for patients
 app.post('/api/signin', async (req, res) => {
   const { email, password } = req.body;
 
@@ -456,9 +465,9 @@ app.post('/api/signin', async (req, res) => {
       return res.status(401).json({ message: 'Incorrect password' });
     }
 
-    // If password matches, issue a JWT token
+    // If password matches, issue a JWT token with role 'patient'
     const token = jwt.sign(
-      { id: user.PatientID, email: user.Email },
+      { id: user.PatientID, email: user.Email, role: 'patient', FullName: user.FullName},
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -470,11 +479,61 @@ app.post('/api/signin', async (req, res) => {
         id: user.PatientID,
         FullName: user.FullName,
         Email: user.Email,
+        role: 'patient',
       },
     });
   } catch (err) {
     console.error('Error during sign-in:', err.message);
     res.status(500).json({ message: 'Error during sign-in' });
+  }
+});
+
+// API route for doctor sign-in
+app.post('/api/doctor_signin', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Check if both fields are filled in
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Please enter both email and password' });
+  }
+
+  try {
+    // Find the doctor by email
+    const doctors = await executeQuery('SELECT * FROM doctors WHERE Email = ?', [email]);
+
+    if (doctors.length === 0) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    const doctor = doctors[0];
+
+    // Compare the entered password with the stored hashed password
+    const isMatch = await bcrypt.compare(password, doctor.PasswordHash);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Incorrect password' });
+    }
+
+    // If password matches, issue a JWT token with role 'doctor'
+    const token = jwt.sign(
+      { id: doctor.DoctorID, email: doctor.Email, role: 'doctor',FullName: doctor.FullName },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      message: 'Doctor sign-in successful',
+      token,
+      user: {
+        id: doctor.DoctorID,
+        FullName: doctor.FullName,
+        Email: doctor.Email,
+        role: 'doctor',
+      },
+    });
+  } catch (err) {
+    console.error('Error during doctor sign-in:', err.message);
+    res.status(500).json({ message: 'Error during doctor sign-in' });
   }
 });
 

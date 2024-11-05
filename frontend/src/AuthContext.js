@@ -1,9 +1,7 @@
 // /frontend/src/AuthContext.js
 
 import React, { createContext, useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode'; 
-//import jwtDecode from 'jwt-decode';
-
+import { jwtDecode } from 'jwt-decode';
 
 // Create the context
 export const AuthContext = createContext();
@@ -20,7 +18,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
-        const decoded = jwtDecode(token); // Updated usage
+        const decoded = jwtDecode(token);
         // Optional: Check if token is expired
         const currentTime = Date.now() / 1000;
         if (decoded.exp < currentTime) {
@@ -32,7 +30,8 @@ export const AuthProvider = ({ children }) => {
             user: {
               id: decoded.id,
               email: decoded.email,
-              // Add other user info if needed
+              role: decoded.role, // Include role
+              FullName: decoded.FullName || '', // Now includes FullName from token
             },
           });
         }

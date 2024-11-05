@@ -1,4 +1,4 @@
-// /frontend/src/components/Header.js
+// frontend/src/components/Header.js
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -47,6 +47,9 @@ function Header() {
     setMobileMenuOpen(false);
   };
 
+  // Determine profile link based on role
+  const profileLink = auth.user && auth.user.role === 'doctor' ? '/doctor-dashboard' : '/myprofile';
+
   return (
     <header className="header">
       <div className="logo-container">
@@ -71,7 +74,7 @@ function Header() {
             </button>
             {dropdownOpen && (
               <div className="dropdown-content" role="menu">
-                <Link to="/myprofile" onClick={() => setDropdownOpen(false)}>View Profile</Link>
+                <Link to={profileLink} onClick={() => setDropdownOpen(false)}>View Profile</Link>
                 <button onClick={handleLogout} className="logout-btn">Log Out</button>
               </div>
             )}

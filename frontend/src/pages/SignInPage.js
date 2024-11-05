@@ -4,7 +4,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import './SignInPage.css';
 import '../common.css';
-import { AuthContext } from '../AuthContext'; // Import AuthContext
+import { AuthContext } from '../AuthContext'; 
 
 function SignInPage() {
   const [formData, setFormData] = useState({
@@ -12,6 +12,7 @@ function SignInPage() {
     password: '',
   });
 
+  const [role, setRole] = useState('patient'); // New state for role
   const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
   const { login } = useContext(AuthContext); // Destructure login function
@@ -24,6 +25,10 @@ function SignInPage() {
     });
   };
 
+  const handleRoleChange = (newRole) => {
+    setRole(newRole);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -32,8 +37,11 @@ function SignInPage() {
 
     const API_URL = process.env.REACT_APP_API_URL;
 
+    // Determine the endpoint based on role
+    const endpoint = role === 'patient' ? '/api/signin' : '/api/doctor_signin';
+
     // Send data to the backend for authentication
-    fetch(`${API_URL}/api/signin`, {
+    fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -54,8 +62,15 @@ function SignInPage() {
       .then((data) => {
         // Update the AuthContext with the token and user info
         login(data.token, data.user);
-        // Navigate to profile page
-        navigate('/myprofile');
+        // Redirect based on role
+        if (data.user.role === 'patient') {
+          navigate('/myprofile');
+        } else if (role === 'doctor') {
+          navigate('/doctor-dashboard');
+        }else {
+          // Handle unexpected roles or errors
+          navigate('/');
+        }
       })
       .catch((error) => {
         console.error('Error during sign-in:', error);
@@ -67,6 +82,21 @@ function SignInPage() {
     <div className="sign-in-page">
       <div className="form-container">
         <h1>Sign In</h1>
+        {/* Role Selection */}
+        <div className="role-selection">
+        <button
+            className={`role-button ${role === 'patient' ? 'active' : ''}`}
+            onClick={() => handleRoleChange('patient')}
+          >
+            Patient
+          </button>
+          <button
+            className={`role-button ${role === 'doctor' ? 'active' : ''}`}
+            onClick={() => handleRoleChange('doctor')}
+          >
+            Doctor
+          </button>
+        </div>
         <form className="sign-in-form" onSubmit={handleSubmit}>
           <label>
             Email:
@@ -92,7 +122,13 @@ function SignInPage() {
           <button type="submit">Sign In</button>
         </form>
         <p className="register-link">
-          Don't have an account? <Link to="/register">Register here</Link>
+          {role === 'patient' ? (
+            <>
+              Don't have an account? <Link to="/register">Register here</Link>
+            </>
+          ) : (
+            "Contact the administrator to register."
+          )}
         </p>
       </div>
     </div>
