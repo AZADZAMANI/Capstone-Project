@@ -1,7 +1,7 @@
 # Capstone Project API Documentation
 
 ## Overview
-The Capstone Project API is built with Node.js and Express, providing endpoints for user registration, authentication, appointment booking, and profile management. JWT tokens secure patient and doctor data access.
+The Capstone Project API is built with Node.js and Express, providing endpoints for user registration, authentication, appointment booking, cancellation, and profile management. JWT tokens secure patient and doctor data access.
 
 ---
 
@@ -125,10 +125,10 @@ The Capstone Project API is built with Node.js and Express, providing endpoints 
   {
     "PatientID": "int",
     "FullName": "string",
-    "BirthDate": "string",
+    "BirthDate": "string (YYYY-MM-DD)",
     "PhoneNumber": "string",
     "Email": "string",
-    "Gender": "string",
+    "Gender": "Male | Female | Other",
     "DoctorID": "int"
   }
   ```
@@ -136,7 +136,7 @@ The Capstone Project API is built with Node.js and Express, providing endpoints 
 #### 3. Get Patient’s Upcoming Appointments
 - **Endpoint**: `/api/patients/:id/upcomingAppointments`
 - **Method**: `GET`
-- **Description**: Retrieves a list of upcoming appointments for a specific patient.
+- **Description**: Retrieves a list of upcoming appointments with status `'Booked'` for a specific patient.
 - **Headers**: 
   - `Authorization`: `Bearer {token}`
 - **Response**:
@@ -155,7 +155,7 @@ The Capstone Project API is built with Node.js and Express, providing endpoints 
 #### 4. Get Patient’s Appointment History
 - **Endpoint**: `/api/patients/:id/appointmentHistory`
 - **Method**: `GET`
-- **Description**: Retrieves a list of past appointments for a specific patient.
+- **Description**: Retrieves a list of all past appointments for a specific patient, including their status.
 - **Headers**: 
   - `Authorization`: `Bearer {token}`
 - **Response**:
@@ -165,7 +165,8 @@ The Capstone Project API is built with Node.js and Express, providing endpoints 
       "AppointmentID": "int",
       "doctor": "string",
       "date": "string (YYYY-MM-DD)",
-      "time": "string (HH:MM)"
+      "time": "string (HH:MM)",
+      "Status": "Booked | Canceled"
     }
   ]
   ```
@@ -219,6 +220,81 @@ The Capstone Project API is built with Node.js and Express, providing endpoints 
   }
   ```
 
---- 
+#### 3. Cancel Appointment
+- **Endpoint**: `/api/appointments/:appointmentID/cancel`
+- **Method**: `POST`
+- **Description**: Cancels an existing appointment. Once canceled, the appointment cannot be restored.
+- **Headers**: 
+  - `Authorization`: `Bearer {token}`
+- **URL Parameters**:
+  - `appointmentID`: The ID of the appointment to cancel.
+- **Response**:
+  ```json
+  {
+    "message": "Appointment canceled successfully"
+  }
+  ```
+- **Notes**:
+  - Only the patient who booked the appointment can cancel it.
+  - The corresponding time slot will be made available for booking by others.
 
-Let me know if further details or customizations are needed.
+---
+
+### Error Handling
+
+- All endpoints may return the following error responses:
+
+  - **400 Bad Request**: Missing or invalid parameters.
+    ```json
+    {
+      "error": "Error message detailing what went wrong."
+    }
+    ```
+
+  - **401 Unauthorized**: Missing or invalid authentication token.
+    ```json
+    {
+      "message": "Access token missing or invalid."
+    }
+    ```
+
+  - **403 Forbidden**: The user does not have permission to perform the action.
+    ```json
+    {
+      "message": "Access denied."
+    }
+    ```
+
+  - **404 Not Found**: The requested resource does not exist.
+    ```json
+    {
+      "error": "Resource not found."
+    }
+    ```
+
+  - **500 Internal Server Error**: An unexpected error occurred on the server.
+    ```json
+    {
+      "error": "Internal server error."
+    }
+    ```
+
+---
+
+### Additional Notes
+
+- **Authentication**: All protected routes require an `Authorization` header with a valid JWT token in the format `Bearer {token}`.
+
+- **Data Consistency**: The API uses transactions to ensure data integrity, especially when booking or canceling appointments.
+
+- **Appointment Status**:
+
+  - Appointments have a `Status` field that can be either `'Booked'` or `'Canceled'`.
+  - Once an appointment is canceled, it cannot be restored or rebooked.
+
+- **Time Formats**:
+
+  - Dates are in `YYYY-MM-DD` format.
+  - Times are in `HH:MM` 24-hour format.
+
+---

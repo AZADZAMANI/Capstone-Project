@@ -139,13 +139,14 @@ const initializeDatabase = async () => {
     );
     console.log('Available_time table ready.');
 
-    // Create appointments table
+    // Create appointments table with Status attribute
     await executeQuery(
       `CREATE TABLE IF NOT EXISTS appointments (
         AppointmentID INT PRIMARY KEY AUTO_INCREMENT,
         PatientID INT NOT NULL,
         DoctorID INT NOT NULL,
         AvailableTimeID INT NOT NULL,
+        Status ENUM('Booked', 'Canceled') NOT NULL DEFAULT 'Booked',
         FOREIGN KEY (PatientID) REFERENCES patients(PatientID)
           ON UPDATE CASCADE
           ON DELETE CASCADE,
@@ -157,7 +158,7 @@ const initializeDatabase = async () => {
           ON DELETE CASCADE
       )`
     );
-    console.log('Appointments table ready.');
+    console.log('Appointments table ready with Status attribute.');
   } catch (err) {
     console.error('Error initializing database:', err.message);
     process.exit(1);
@@ -295,7 +296,7 @@ app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req,
       FROM appointments a
       JOIN doctors d ON a.DoctorID = d.DoctorID
       JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
-      WHERE a.PatientID = ? AND at.ScheduleDate >= CURDATE()
+      WHERE a.PatientID = ? AND at.ScheduleDate >= CURDATE() AND a.Status = 'Booked'
       ORDER BY at.ScheduleDate ASC, at.StartTime ASC
       `,
       [id]
@@ -324,11 +325,12 @@ app.get('/api/patients/:id/appointmentHistory', authenticateToken, async (req, r
         a.AppointmentID, 
         d.FullName AS doctor, 
         DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
-        TIME_FORMAT(at.StartTime, '%H:%i') AS time
+        TIME_FORMAT(at.StartTime, '%H:%i') AS time,
+        a.Status
       FROM appointments a
       JOIN doctors d ON a.DoctorID = d.DoctorID
       JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
-      WHERE a.PatientID = ? AND at.ScheduleDate < CURDATE()
+      WHERE a.PatientID = ?
       ORDER BY at.ScheduleDate DESC, at.StartTime DESC
       `,
       [id]
@@ -436,6 +438,62 @@ app.post('/api/book_appointment', authenticateToken, async (req, res) => {
     console.error('Error booking appointment:', err.message);
     await promisePool.query('ROLLBACK');
     res.status(500).json({ error: 'Failed to book appointment' });
+  }
+});
+
+// API route to cancel an appointment (protected route)
+app.post('/api/appointments/:appointmentID/cancel', authenticateToken, async (req, res) => {
+  const appointmentID = req.params.appointmentID;
+  const userID = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    // Fetch the appointment
+    const appointmentResult = await executeQuery(
+      'SELECT * FROM appointments WHERE AppointmentID = ?',
+      [appointmentID]
+    );
+
+    if (appointmentResult.length === 0) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    const appointment = appointmentResult[0];
+
+    // Check if the appointment is already canceled
+    if (appointment.Status === 'Canceled') {
+      return res.status(400).json({ error: 'Appointment is already canceled' });
+    }
+
+    // Ensure that only the patient who booked the appointment can cancel it
+    if (userRole !== 'patient' || appointment.PatientID !== userID) {
+      return res.status(403).json({ error: 'You are not authorized to cancel this appointment' });
+    }
+
+    // Start a transaction
+    await promisePool.query('START TRANSACTION');
+
+    // Update the appointment status to 'Canceled'
+    await executeQuery(
+      'UPDATE appointments SET Status = ? WHERE AppointmentID = ?',
+      ['Canceled', appointmentID]
+    );
+
+    // Set the available_time slot back to available
+    await executeQuery(
+      'UPDATE available_time SET IsAvailable = 1 WHERE AvailableTimeID = ?',
+      [appointment.AvailableTimeID]
+    );
+
+    // Commit the transaction
+    await promisePool.query('COMMIT');
+
+    res.json({ message: 'Appointment canceled successfully' });
+
+  } catch (err) {
+    console.error('Error canceling appointment:', err.message);
+    await promisePool.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to cancel appointment' });
   }
 });
 
