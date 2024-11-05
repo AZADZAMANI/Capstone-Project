@@ -63,6 +63,13 @@ CSCI6806.V1 Computer Science Graduate Capstone Project
    node server.js
    ```
    - This initializes tables and inserts sample data into the `doctors` table.
+  
+      | FullName        | Email                   | Password    | MaxPatientNumber | CurrentPatientNumber |
+      |-----------------|------------------------|-------------|--------------------|----------------------|
+      | Dr. John Smith   | john.smith@example.com | password123 | 100                | 0                    |
+      | Dr. Emily Davis  | emily.davis@example.com | password123 | 80                 | 0                    |
+      | Dr. Michael Brown | michael.brown@example.com | password123 | 120                | 0                    |
+
 
 5. Populate available time slots:
    ```bash
