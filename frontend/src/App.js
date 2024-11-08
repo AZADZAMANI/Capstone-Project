@@ -11,6 +11,7 @@ import Header from './components/Header';
 import BookAppointmentPage from './pages/BookAppointmentPage';
 import DoctorDashboard from './pages/DoctorDashboard'; // Import DoctorDashboard
 import { AuthContext } from './AuthContext'; // Import AuthContext
+import StaffPortal from './pages/StaffPortal';
 
 function App() {
   const { auth } = useContext(AuthContext); // Access auth state
@@ -60,6 +61,17 @@ function App() {
               element={
                 auth.token && auth.user.role === 'doctor' ? (
                   <DoctorDashboard />
+                ) : (
+                  <Navigate to="/signin" />
+                )
+              } 
+            />
+
+              <Route 
+              path="/staff-portal" 
+              element={
+                auth.token && auth.user.role === 'doctor' ? (
+                  <StaffPortal />
                 ) : (
                   <Navigate to="/signin" />
                 )
