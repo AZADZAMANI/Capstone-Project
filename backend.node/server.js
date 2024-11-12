@@ -293,9 +293,9 @@ app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req,
         DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
         TIME_FORMAT(at.StartTime, '%H:%i') AS startTime, 
         TIME_FORMAT(at.EndTime, '%H:%i') AS endTime
-      FROM clinic.appointments a
-      JOIN clinic.doctors d ON a.DoctorID = d.DoctorID
-      JOIN clinic.available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      FROM appointments a
+      JOIN doctors d ON a.DoctorID = d.DoctorID
+      JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
       WHERE a.PatientID = ? AND at.ScheduleDate >= CURDATE() AND a.Status = 'Booked'
       ORDER BY at.ScheduleDate ASC, at.StartTime ASC
       `,
@@ -459,9 +459,9 @@ app.get('/api/doctors/:id/upcomingAppointments', authenticateToken, async (req, 
         DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
         TIME_FORMAT(at.StartTime, '%H:%i') AS startTime, 
         TIME_FORMAT(at.EndTime, '%H:%i') AS endTime
-      FROM clinic.appointments a
-      JOIN clinic.patients p ON a.PatientID = p.PatientID
-      JOIN clinic.available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      FROM appointments a
+      JOIN patients p ON a.PatientID = p.PatientID
+      JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
       WHERE a.DoctorID = ? AND at.ScheduleDate >= CURDATE() AND a.Status = 'Booked'
       ORDER BY at.ScheduleDate ASC, at.StartTime ASC;
       `,
