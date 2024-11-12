@@ -46,8 +46,8 @@ const handleDelete = async (appointmentid) =>{
 
     return(
         <div>
-            <h1>StaffPortal</h1>
-            <section className="appointments-section" style={{width:"90vw",textAlign:"center",marginLeft:"50px"}}>
+            
+            <section className="appointments-section" style={{width:"90%",textAlign:"center"}}>
         <h3>Upcoming Appointments</h3>
         <table >
           <thead>

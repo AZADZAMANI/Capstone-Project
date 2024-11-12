@@ -71,7 +71,7 @@ function Header() {
         <Link to="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
         <Link to="#how-to-book" onClick={() => setMobileMenuOpen(false)}>How to Book</Link>
         <Link to="#about-us" onClick={() => setMobileMenuOpen(false)}>About Us</Link>
-        {disableBook ? <Link to="/staff-portal" onClick={() => setMobileMenuOpen(false)}>StaffPortal</Link> : null }
+        {/* {disableBook ? <Link to="/staff-portal" onClick={() => setMobileMenuOpen(false)}>StaffPortal</Link> : null } */}
         {auth.token ? (
           <div className="dropdown" ref={dropdownRef}>
             <button
