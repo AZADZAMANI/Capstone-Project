@@ -13,6 +13,15 @@ function Header() {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
+  // Determine if buttons should be disabled
+  const isPatientLoggedIn = auth.user && auth.user.role === 'patient';
+  const isDoctorLoggedIn = auth.user && auth.user.role === 'doctor';
+
+  // Disable 'Register' button if patient or doctor is logged in
+  // Disable 'Book Now' button if doctor is logged in
+  const disableRegister = isPatientLoggedIn || isDoctorLoggedIn;
+  const disableBook = isDoctorLoggedIn;
+
   // Toggle dropdown menu
   const toggleDropdown = () => {
     setDropdownOpen(!dropdownOpen);
@@ -62,6 +71,7 @@ function Header() {
         <Link to="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
         <Link to="#how-to-book" onClick={() => setMobileMenuOpen(false)}>How to Book</Link>
         <Link to="#about-us" onClick={() => setMobileMenuOpen(false)}>About Us</Link>
+        {/* {disableBook ? <Link to="/staff-portal" onClick={() => setMobileMenuOpen(false)}>StaffPortal</Link> : null } */}
         {auth.token ? (
           <div className="dropdown" ref={dropdownRef}>
             <button

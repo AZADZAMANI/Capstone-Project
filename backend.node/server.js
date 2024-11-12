@@ -26,7 +26,7 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -293,9 +293,9 @@ app.get('/api/patients/:id/upcomingAppointments', authenticateToken, async (req,
         DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
         TIME_FORMAT(at.StartTime, '%H:%i') AS startTime, 
         TIME_FORMAT(at.EndTime, '%H:%i') AS endTime
-      FROM appointments a
-      JOIN doctors d ON a.DoctorID = d.DoctorID
-      JOIN available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      FROM clinic.appointments a
+      JOIN clinic.doctors d ON a.DoctorID = d.DoctorID
+      JOIN clinic.available_time at ON a.AvailableTimeID = at.AvailableTimeID
       WHERE a.PatientID = ? AND at.ScheduleDate >= CURDATE() AND a.Status = 'Booked'
       ORDER BY at.ScheduleDate ASC, at.StartTime ASC
       `,
@@ -412,7 +412,7 @@ app.post('/api/book_appointment', authenticateToken, async (req, res) => {
 
     // Insert the appointment
     const appointmentResult = await executeQuery(
-      'INSERT INTO appointments (PatientID, DoctorID, AvailableTimeID) VALUES (?, ?, ?)',
+      'INSERT INTO appointments (PatientID, DoctorID, AvailableTimeID,Status) VALUES (?, ?, ?, "Booked")',
       [patientID, doctorID, availableTimeID]
     );
 
@@ -441,6 +441,40 @@ app.post('/api/book_appointment', authenticateToken, async (req, res) => {
   }
 });
 
+// Shakil creatd this for staff protal doctors upcoming appointment.
+app.get('/api/doctors/:id/upcomingAppointments', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  // Ensure the requester is accessing their own data or is a doctor
+  if (req.user.role === 'patient' || parseInt(id, 10) !== req.user.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+
+  try {
+    const appointments = await executeQuery(
+      `
+     SELECT 
+        a.AppointmentID, 
+        p.FullName AS patients, 
+        DATE_FORMAT(at.ScheduleDate, '%Y-%m-%d') AS date, 
+        TIME_FORMAT(at.StartTime, '%H:%i') AS startTime, 
+        TIME_FORMAT(at.EndTime, '%H:%i') AS endTime
+      FROM clinic.appointments a
+      JOIN clinic.patients p ON a.PatientID = p.PatientID
+      JOIN clinic.available_time at ON a.AvailableTimeID = at.AvailableTimeID
+      WHERE a.DoctorID = ? AND at.ScheduleDate >= CURDATE() AND a.Status = 'Booked'
+      ORDER BY at.ScheduleDate ASC, at.StartTime ASC;
+      `,
+      [id]
+    );
+
+    res.json(appointments);
+  } catch (err) {
+    console.error('Error fetching upcoming appointments:', err.message);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
+});
+
 // API route to cancel an appointment (protected route)
 app.post('/api/appointments/:appointmentID/cancel', authenticateToken, async (req, res) => {
   const appointmentID = req.params.appointmentID;
@@ -466,7 +500,7 @@ app.post('/api/appointments/:appointmentID/cancel', authenticateToken, async (re
     }
 
     // Ensure that only the patient who booked the appointment can cancel it
-    if (userRole !== 'patient' || appointment.PatientID !== userID) {
+    if (userRole === 'patient') {
       return res.status(403).json({ error: 'You are not authorized to cancel this appointment' });
     }
 
