@@ -1,8 +1,0 @@
-asgiref
-Django
-django-cors-headers
-djangorestframework
-pip
-setuptools
-sqlparse
-typing_extensions
