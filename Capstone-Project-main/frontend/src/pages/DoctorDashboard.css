@@ -1,0 +1,42 @@
+/* frontend/src/pages/DoctorDashboard.css */
+
+/* Container for the dashboard */
+.doctor-dashboard {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    text-align: center;
+    background-color: #f8f9fa; /* Light gray background */
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Dashboard heading */
+  .doctor-dashboard h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: #343a40; /* Dark gray color */
+  }
+  
+  /* Welcome message */
+  .doctor-dashboard p {
+    font-size: 1.2rem;
+    color: #495057; /* Medium gray color */
+  }
+  
+  /* Optional: Add responsive design */
+  @media (max-width: 600px) {
+    .doctor-dashboard {
+      margin: 20px;
+      padding: 15px;
+    }
+  
+    .doctor-dashboard h1 {
+      font-size: 2rem;
+    }
+  
+    .doctor-dashboard p {
+      font-size: 1rem;
+    }
+  }
+  
