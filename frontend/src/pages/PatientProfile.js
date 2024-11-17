@@ -1,17 +1,24 @@
+// src/pages/PatientProfile.js
+
 import React, { useState, useEffect, useContext } from 'react';
 import './PatientProfile.css';
-import { AuthContext } from '../AuthContext'; // Import AuthContext
+import { AuthContext } from '../AuthContext';
+import ConfirmModal from '../components/ConfirmModal'; // Import ConfirmModal
 
 function PatientProfile() {
-  const { auth } = useContext(AuthContext); // Access auth state
+  const { auth } = useContext(AuthContext);
   const [patient, setPatient] = useState(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [appointmentHistory, setAppointmentHistory] = useState([]);
-  const [loading, setLoading] = useState(true); // State to track loading
-  const [error, setError] = useState(null); // State to track any errors
-  const [message, setMessage] = useState(null); // State to track success or error messages
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
 
-  // Fetch data from the backend when the component mounts
+  // States for Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+
+  // Fetch patient data
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
@@ -57,21 +64,23 @@ function PatientProfile() {
         const historyData = await historyResponse.json();
         setAppointmentHistory(historyData);
 
-        setLoading(false); // Set loading to false once all data is fetched
+        setLoading(false);
       } catch (err) {
         console.error('Error fetching patient data:', err);
         setError('Failed to fetch data. Please try again later.');
-        setLoading(false); // Stop loading in case of error
+        setLoading(false);
       }
     };
 
     fetchPatientData();
   }, [auth.user.id, auth.token]);
 
-  // Define the async function to handle appointment cancellation
-  const handleCancelAppointment = async (appointmentID) => {
+  // Handle appointment cancellation
+  const handleCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/appointments/${appointmentID}/cancel`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/appointments/${appointmentToCancel}/cancel`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${auth.token}`,
@@ -84,13 +93,28 @@ function PatientProfile() {
         throw new Error(errorData.error || 'Failed to cancel appointment');
       }
 
-      // Show success message and update the list of upcoming appointments
-      setMessage('Appointment canceled successfully');
-      setUpcomingAppointments(upcomingAppointments.filter(app => app.AppointmentID !== appointmentID));
+      // Show success message and update the appointments list
+      setMessage('Appointment canceled successfully.');
+      setUpcomingAppointments(upcomingAppointments.filter(app => app.AppointmentID !== appointmentToCancel));
     } catch (error) {
       console.error('Error canceling appointment:', error);
       setError(error.message || 'Failed to cancel appointment. Please try again.');
+    } finally {
+      setIsModalOpen(false);
+      setAppointmentToCancel(null);
     }
+  };
+
+  // Open the confirmation modal
+  const openModal = (appointmentID) => {
+    setAppointmentToCancel(appointmentID);
+    setIsModalOpen(true);
+  };
+
+  // Close the confirmation modal
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setAppointmentToCancel(null);
   };
 
   if (loading) {
@@ -110,11 +134,11 @@ function PatientProfile() {
       <h1>Welcome back, {patient.FullName}</h1>
       <h2>Welcome to Destination Health. How can we help you today?</h2>
 
-      {/* Display message if any */}
+      {/* Display messages */}
       {message && <div className="message success">{message}</div>}
       {error && <div className="message error">{error}</div>}
 
-      {/* Patient Details Section */}
+      {/* Patient Details */}
       <section className="patient-details">
         <h3>Your Details</h3>
         <p><strong>Full Name:</strong> {patient.FullName}</p>
@@ -124,7 +148,7 @@ function PatientProfile() {
         <p><strong>Gender:</strong> {patient.Gender}</p>
       </section>
 
-      {/* Upcoming Appointments Section */}
+      {/* Upcoming Appointments */}
       <section className="appointments-section">
         <h3>Upcoming Appointments</h3>
         <table className="appointments-table">
@@ -145,7 +169,7 @@ function PatientProfile() {
                   <td>{`${appointment.startTime} - ${appointment.endTime}`}</td>
                   <td>
                     <button
-                      onClick={() => handleCancelAppointment(appointment.AppointmentID)}
+                      onClick={() => openModal(appointment.AppointmentID)}
                       className="cancel-button"
                     >
                       Cancel
@@ -162,7 +186,7 @@ function PatientProfile() {
         </table>
       </section>
 
-      {/* Appointment History Section */}
+      {/* Appointment History */}
       <section className="history-section">
         <h3>Appointment History</h3>
         <table className="history-table">
@@ -190,6 +214,17 @@ function PatientProfile() {
           </tbody>
         </table>
       </section>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isModalOpen}
+        onRequestClose={closeModal}
+        onConfirm={handleCancelAppointment}
+        title="Confirm Cancellation"
+        message="Are you sure you want to cancel this appointment?"
+        confirmText="Yes, Cancel"
+        cancelText="No, Go Back"
+      />
     </div>
   );
 }

@@ -13,3 +13,17 @@ td button {
     color: white; 
     border: 2px solid lightgray;
   }
+  .cancel-button {
+    background-color: #d9534f; /* Bootstrap's danger color */
+    color: #ffffff;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.3s ease;
+  }
+  
+  .cancel-button:hover {
+    background-color: #c9302c;
+  }
