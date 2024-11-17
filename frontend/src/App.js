@@ -1,7 +1,7 @@
 // frontend/src/App.js
 
 import React, { useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
 import PatientProfile from './pages/PatientProfile';
@@ -9,15 +9,15 @@ import SignInPage from './pages/SignInPage';
 import './common.css';
 import Header from './components/Header';
 import BookAppointmentPage from './pages/BookAppointmentPage';
-import DoctorDashboard from './pages/DoctorDashboard'; // Import DoctorDashboard
-import { AuthContext } from './AuthContext'; // Import AuthContext
+import DoctorDashboard from './pages/DoctorDashboard';
+import { AuthContext } from './AuthContext';
 import StaffPortal from './pages/StaffPortal';
 
 function App() {
-  const { auth } = useContext(AuthContext); // Access auth state
+  const { auth } = useContext(AuthContext); 
 
   return (
-    <Router basename="/Capstone-Project">
+    <Router> 
       <div className="App">
         <Header />
         <div className="main-content">
@@ -66,8 +66,7 @@ function App() {
                 )
               } 
             />
-
-              <Route 
+            <Route 
               path="/staff-portal" 
               element={
                 auth.token && auth.user.role === 'doctor' ? (
@@ -77,7 +76,6 @@ function App() {
                 )
               } 
             />
-            {/* Redirect unknown routes to home */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>
